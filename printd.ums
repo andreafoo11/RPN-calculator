@@ -1,0 +1,165 @@
+.section init 
+    .zero r0 // declare global register r0 to hold zero
+    .temp r6, r7 // set r6 and r7 as temporary registers
+    r0 := 0 // set global register r0 to 0
+
+################################################################################
+
+.section data 
+
+    // emits 100,000 um words in seg0 and assigns them all to 0 to allocate 
+    // space for the new temporary stack that will store original values of the 
+    // value stack as they are being popped off to be printed. 
+    .space 10000 
+    new_stack:  // set the label new_stack to point to the bottom of the new 
+                // temp stack   
+
+
+################################################################################
+
+.section text
+
+    // r4: pointer to the top of the new temporary stack (In this module)
+    // Main print function that is called when the user tries to print all 
+    // values in the value stack
+    print_contents: 
+        r4 := new_stack  
+        goto main_loop 
+        
+   
+    // r5: height of the value stack (in this procedure)
+    // r3: pointer to the top of the value stack (global register)
+    // value_stack: label that points to the bottom of the value stack (global)
+    // Loops through each number in the value stack by checking the height of 
+    // the value stack and then printing the top number of the value stack in 
+    // print_one_number if the height is not 0. Either calls print to print the 
+    // number in value stack or restore value stack if there are no numbers 
+    // left to print 
+    main_loop:
+        r5 := value_stack - r3 
+        if (r5 != 0) goto print_one_number // case when there are numbers 
+                                           // in the stack 
+        goto restore_stack // case when there are no numbers in the stack, 
+                           // restore original value tack
+
+
+    
+    // r3: top of value stack (global)
+    // r5: Gets the top element on the value stack and stores the value in the 
+    //     new temp stack (in this procedure)
+    // r4: pointer to the top of the new temp stack (in this module)
+    // r1: Used as a temporary register in the if statement comparison (line 54)
+    // goes to the appropriate print functions based on whether the number in 
+    // r5 is 0, negative, or positive. 
+    print_one_number:
+        pop r5 off stack r3 // number to be printed currently stored in r5
+        push r5 on stack r4 // store in new_stack   
+        output ">>> "
+        if (r5 == 0) goto print_zero 
+        if (r5 <s 0) goto print_neg using r1
+        goto print_positive_numbers 
+
+
+    // Case when the number to be printed is zero. Program outputs and returns 
+    // tpmain loop to print the other numbers in the value stack 
+    print_zero:
+        output '0'
+        output '\n'
+        goto main_loop 
+
+
+    // r0: 0 (global register)
+    // r4: pointer to the top of the new temp stack (in this module)
+    // goes to get_pos digits after pushing 0 onto value stack that will act 
+    // as a counter for the number of digits in the number stored in r5
+    print_positive_numbers:
+        push r0 on stack r4 
+        goto get_pos_digits 
+            
+
+
+    // r2: pointer to the top of the call stack (global)
+    // r4: pointer to the top of the temporary new stack (in this module)
+    // r5: stores the (decimal) number to be printed. After getting the least 
+    //      significant digit, r5 stores the number that is updated with one 
+    //      less sig digit  (in this procedure)
+    // r1: Temporary register that stores the least significant digit of number 
+    //     in r5 
+    //     after pushing this value into the call stack (temporarily), it 
+    //     stores the counter that is popped off the value stack that will hold 
+    //     the number of digits temporarily stored in the call stack. r1 is 
+    //     incremented and pushed back onto the value stack gets each digit in 
+    //     the number in r5, store, each digit starting from the least sig fig 
+    //     in the call stack using r2 and store counter of number of digits 
+    //     in r5 into value stack using r4 temporarily. Goes to print_pos once 
+    //     loop is complete and all digits are stored in call stack 
+    get_pos_digits:
+        r1 := r5 mod 10 // r1 getting least significant digit 
+        push r1 on stack r2 // storing least significant digit in call stack 
+                            // (that currently acts as a temporary stack)
+        pop r1 off stack r4 // r1 is now a counter 
+        r1 := r1 + 1
+        push r1 on stack r4
+        r5 := r5 / 10 // updates the number to one less least sig digit  
+        if (r5 != 0) goto get_pos_digits
+        goto print_pos
+    
+
+    // r2: pointer to the top of the call stack (global)
+    // r4: pointer to the top of the temporary new stack (in this module)
+    // r5: stores number of digits to print (counter popped off of value stack 
+    //     using r4) (in this procedure)
+    // r1: Temporary register that starts printing the number originally at the 
+    //       top of the temporary new stack, starting from the most significant 
+    //       digit, which is currently at the top of the call stack (in this 
+    //       procedure) outputs every digit of the number to be printed,
+    //       starting from the most significant digit and decrementing 
+    //       the counter stored at the top of the temporary new stack each time 
+    //       goes back to the main loop once all the digits are printed, which 
+    //      is when the counter is 0. 
+    print_pos:
+        pop r5 off stack r4 // r5 holds number of digits to print
+        pop r1 off stack r2 // popping off the digit to be printed
+        output r1 + '0' // convert ASCII to digits 
+        r5 := r5 - 1
+        push r5 on stack r4
+        if (r5 != 0) goto print_pos
+        output "\n"
+        pop r5 off stack r4 // restore temp var r5
+        goto main_loop 
+
+
+
+    // r5: stores the (decimal) number to be printed. Negated using negative 
+    //     sign and then calls print positive numebrs to print the absolute 
+    //     value of the number (in this procedure)
+    //     outputs the negative sign and then calls print_positive_numbers to 
+    //     print out the absolute value of the number to be printed 
+    print_neg: 
+        output '-'  
+        r5 := -r5 // r5 currently holding the absolute value of the neg number
+        goto print_positive_numbers  
+
+
+
+    // r4: pointer to the top of the new temp stack (in this module)
+    // new_stack: Pointer to the bottom of the new stack 
+    // r3: pointer to top of the value stack (global)
+    // r1: Used as a temporary register to pop off a number from the temp new 
+    //     stack and store it back into the value stack (temporary in this 
+    //     procedure)
+    // r5: Temporarily storing new stack neight (in this procedure)
+    //     restores the original value stack by popping off all numbers in the 
+    //     temp stack and
+    //     putting it back into the value stack. Returns to waiting once it is 
+    //     completed. 
+    restore_stack:
+        r5 := new_stack - r4 // r5 temporarily storing new_stack height
+        if (r5 == 0) goto waiting // checks to see if there are any elements 
+                                  // left in temp stack 
+        pop r1 off stack r4 
+        push r1 on stack r3 // r3 is top of value stack
+        r5 := new_stack - r4 // r5 temporarily storing new_stack height 
+        if (r5 != 0) goto restore_stack // loops again if there are
+                                        // still numbers left in the temp stack
+        goto waiting 

@@ -1,0 +1,14 @@
+.section init 
+    .zero r0 // declare global register r0 to hold zero
+    .temp r6, r7 // set r6 and r7 as temporary registers
+     r0 := 0 // set global register r0 to 0
+     r2 := call_stack // r2 takes address of endstack 
+                      // (points to top of the callstack)
+    
+.section data 
+    // emits 100,000 um words in seg0 and assigns them all 
+    // to 0 to allocate space for the call stack 
+    .space 100000 
+
+    // sets label call_stack to point to bottom of the call stack
+    call_stack:  

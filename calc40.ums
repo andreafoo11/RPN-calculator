@@ -1,0 +1,488 @@
+.section init 
+    .zero r0 // declare global register r0 to hold zero
+    .temp r6, r7 // set r6 and r7 as temporary registers
+    r0 := 0 // set global register r0 to 0
+
+.section data 
+    // Emits 100,000 um words in segment 0 and assigns them all to 0 to 
+    // allocate space for the value stack that will store all our values
+    // read in and calculated results.
+    .space 100000
+
+    // Sets the label value_stack to point to the bottom of the value stack.  
+    value_stack: 
+
+.section init 
+    // r3: pointer to the top of the value stack
+    r3 := value_stack 
+
+################################################################################
+  
+.section rodata // read only data 
+    jumptable: // address of our jumptable 
+        .space 256 // create space for all 256 ASCII chars 
+
+.section init 
+    r5 := 0 // r5 is our i iterator  
+
+    // r4: non-volatile register 
+    // r5: iterator 
+    // Initialize jumptable to all input error at program start
+    init_jumptable: 
+        r4 := jumptable + r5
+        m[r0][r4] := input_error
+        r5 := r5 + 1
+        if (r5 <s 256) goto init_jumptable using r4 // loop till end of 
+                                                    // jumptable 
+  
+    // initialize jumptable with labels at different char offsets 
+    m[r0][jumptable + ' '] := waiting 
+    m[r0][jumptable + '\n'] := print_contents
+    m[r0][jumptable + '0'] := digit 
+    m[r0][jumptable + '1'] := digit 
+    m[r0][jumptable + '2'] := digit 
+    m[r0][jumptable + '3'] := digit 
+    m[r0][jumptable + '4'] := digit 
+    m[r0][jumptable + '5'] := digit 
+    m[r0][jumptable + '6'] := digit 
+    m[r0][jumptable + '7'] := digit 
+    m[r0][jumptable + '8'] := digit 
+    m[r0][jumptable + '9'] := digit 
+
+################################################################################
+    
+.section text 
+    // r1: holds return address 
+    // r2: pointer to the top of the call stakc 
+    main: 
+        push r1 on stack r2 // save return address in call stack 
+        goto waiting 
+        pop r5 off stack r2 // get return address 
+        r1 := 0 // EXIT_SUCCESS is the result 
+        goto r5 // go to return address from main (in callmain.ums)
+
+    // r1: holds inputs     
+    // Takes in input and puts them in r1      
+    waiting:      
+        r1 := input() 
+    
+    // r1: holds input from user 
+    // r5: takes us to the jumptable location with the char offset in r1 
+    // Deals with input after 
+    waiting_with_character:  
+        if (r1 == -1) goto exit_program using r5 // checks for EOF 
+        r5 := jumptable + r1 // accessing address of character to be processed
+        r5 := m[r0][r5] // dereferencing r5 pointer 
+        goto r5 // goes to label linked to jumptable + r1 offset 
+    
+    // r1: holds the digit value inputted by user 
+    // r3: pointer to the top of value stack. 
+    // Pushes values into value stack in decimal form.  
+    digit: 
+        r1 := r1 - '0' // convert ASCII to digit 
+        push r1 on stack r3
+        goto entering
+    
+    // r1: holds input 
+    // Deals with numerals with multiple digits (2+ digit numbers).
+    entering: 
+        r1 := input()
+        if (r1 <=s '9') goto more_digits using r5 
+        goto waiting_with_character
+    
+    // r1: holds input value
+    // r3: pointer to the top of value stack 
+    // r4: temp register used to access the next digit of input 
+    // r5: temporary register used for comparison  
+    // Pushes the next digit of number onto the value stack 
+    more_digits: 
+        if (r1 <s '0') goto waiting_with_character using r5
+        r1 := r1 - '0' // convert ASCII to decimal 
+        pop r4 off stack r3
+        r4 := r4 * 10 
+        r4 := r4 + r1
+        
+        push r4 on stack r3
+        goto entering
+
+##########################################################################
+
+.section text
+
+    //outputs error message if unknown character is inputted 
+    input_error: 
+        output "Unknown character\n"
+        goto waiting
+   
+    // outputs error message if there are less than two elements 
+    print_error:
+        output "Stack underflow---expected at least 2 elements\n"
+        goto waiting 
+
+    // exits the program 
+    exit_program:
+        halt 
+
+    // r4: holds the height of value stack
+    // r3: points to the top of value stack
+    // r1: return address 
+    // r5: temp variable used in if statement comparison 
+    // Checks that there are 2 values on the value_stack. Otherwise, go to 
+    // print_error. 
+    check_two_values: 
+        r4 := value_stack - r3 // r4 holds stack height  
+        if (r4 >=s 2) goto r1 using r5 // there are at least 2 vals on the stack
+        goto print_error 
+
+    // r4: stack height of value stack
+    // r3: pointer to top of value stack 
+    // r5: temporary register used in comparison 
+    // r1: return address 
+    // Checks that there is at least 1 value on the value stack. Otherwise, go 
+    // to print_one_value_error. 
+    check_one_value:
+        r4 := value_stack - r3 // r4 holds stack height  
+        if (r4 >=s 1) goto r1 using r5 // there are at least 2 vals on the stack
+        goto print_one_value_error
+    
+    // Prints an error message if there is less than one element 
+    print_one_value_error:
+        output "Stack underflow---expected at least 1 element\n"
+        goto waiting 
+
+################################################################################
+
+.section init
+    m[r0][jumptable + '*'] := mul
+
+.section text 
+    // r1: return address
+    // r4: holds first value to be multiplied 
+    // r3: pointer to the top of value stack 
+    // r5: holds second value to be multiplied, then the multiplied result
+    // Multiplies two numbers and pushes the result (in r5) onto the value 
+    // stack. 
+    mul: 
+        goto check_two_values linking r1 // checks to make sure there are at 
+                                         // least two numbers in the value stack
+                                         // linking return address 
+        pop r4 off stack r3 // taking value off of value_stack, which is r3
+        pop r5 off stack r3
+        
+        r5 := r5 * r4
+        
+        push r5 on stack r3 // pushing multiplied result onto the value stack 
+        goto waiting
+
+################################################################################
+
+.section init
+    m[r0][jumptable + '+'] := add
+
+.section text 
+    // r1: return address
+    // r4: holds first value to be added
+    // r3: points to the top of the value stack
+    // r5: holds second value to be added, then the added result 
+    // Adds two numbers and pushes the result (in r5) onto the value stack. 
+    add: 
+        goto check_two_values linking r1 // checks to make sure there are at 
+                                         // least two numbers in the value stack
+                                         // linking return address 
+        pop r4 off stack r3 // popping value off of value_stack
+        pop r5 off stack r3
+        
+        r5 := r5 + r4 // add computation 
+        
+        push r5 on stack r3 // pushing the added result onto value stack 
+        goto waiting
+
+################################################################################
+
+.section init
+    m[r0][jumptable + '-'] := sub
+
+.section text 
+    // r1: return address
+    // r4: holds value to be subtracted
+    // r3: points to the top of the value stack
+    // r5: holds second value to subtact from, then the subtracted result 
+    // Subtracts two numbers and pushes the result (in r5) onto value stack. 
+    sub: 
+        goto check_two_values linking r1 // checks to make sure there are at 
+                                         // least two numbers in the value 
+                                         // stack linking return address 
+        pop r4 off stack r3 // popping value off of value_stack, which is r3
+        pop r5 off stack r3
+        
+        r5 := r5 - r4 // subtraction computation 
+        
+        push r5 on stack r3
+        goto waiting
+
+################################################################################
+
+.section init
+    m[r0][jumptable + '|'] := or
+
+.section text 
+    // r1: return address
+    // r4: first value to be computed on
+    // r3: pointer to the top of value stack
+    // r5: second value to be computed on, then the computed result 
+    // Performs 'bitwise or' operation on two numbers and pushes the result (in 
+    // r5) onto value stack. 
+    or: 
+        goto check_two_values linking r1 // checks to make sure there are at 
+                                         // least two numbers in the value 
+                                         // stack linking return address
+        pop r4 off stack r3 // popping value off of value_stack
+        pop r5 off stack r3
+        
+        r5 := r5 | r4 // OR computation 
+        
+        push r5 on stack r3
+        goto waiting
+
+################################################################################
+
+.section init
+    m[r0][jumptable + '&'] := and
+
+.section text 
+    // r1: return address
+    // r4: first value to be computed on
+    // r3: pointer to the top of value stack
+    // r5: second value to be computed on 
+    // Performs 'bitwise and' operation on two numbers and pushes the result 
+    // (in r5) onto value stack. 
+    and: 
+        goto check_two_values linking r1 // checks to make sure there are at    
+                                         // least two numbers in the value 
+                                         // stack linking return address
+        pop r4 off stack r3 // popping value off of value_stack
+        pop r5 off stack r3
+        
+        r5 := r5 & r4 // AND computation 
+        
+        push r5 on stack r3
+        goto waiting
+
+
+################################################################################
+
+.section init
+    m[r0][jumptable + 'c'] := change_sign
+
+.section text 
+    // r1: return address
+    // r5: holding value whose sign will change, then the value of changed sign
+    // r3: pointer to the top of value stack 
+    // Changes sign of a value x to -x and pushes the result onto value stack. 
+    change_sign: 
+        goto check_one_value linking r1 // checks to make sure there are 
+                                        // numbers in the value stack linking 
+                                        // return address
+        pop r5 off stack r3 // taking value off of value_stack
+        r5 := -r5  // changes sign 
+        push r5 on stack r3
+        goto waiting
+
+
+################################################################################
+
+.section init
+    m[r0][jumptable + '~'] := bitwise_complement
+
+.section text 
+
+    // r3: pointer to the top of the value stack (global)
+    // r1: store return address for checking one value
+    // r4: Temporary register to store value at the top of the vlaue stack 
+    // Performs bitwise complement operation on value x to ~x, then pushes the 
+    // result onto the value stack. 
+    bitwise_complement: 
+        goto check_one_value linking r1 // checks to make sure there are 
+                                        // numbers in the value stack linking 
+                                        // return address
+        pop r4 off stack r3 // popping value off of value_stack
+        r4 := ~r4 // bitwise complement 
+        push r4 on stack r3
+        goto waiting
+
+################################################################################
+
+.section init
+    m[r0][jumptable + 's'] := swap
+
+.section text 
+
+    // r3: pointer to the top of the value stack (global)
+    // r1: store return address for checking one value
+    // r4: Temporary register to store value at the top of the vlaue stack 
+    // Swaps two values on top of the value stack, then pushes result onto the 
+    // value stack. For example, the order of x and y then becomes y and x. 
+    swap: 
+        goto check_two_values linking r1 // checks to make sure there are at 
+                                         // least two numbers in the value 
+                                         // stack linking return
+        pop r4 off stack r3 // popping value off of value_stack
+        pop r5 off stack r3
+        
+        push r4 on stack r3
+        push r5 on stack r3
+        goto waiting
+
+################################################################################
+
+.section init
+    m[r0][jumptable + 'd'] := duplicate
+
+.section text 
+
+    // r3: pointer to the top of the value stack (global)
+    // r1: store return address for checking one value
+    // r4: Temporary register to store value at the top of the vlaue stack 
+    // Duplicates the value on the top of the value stack, then pushes that 
+    // duplicated value and original value both back onto the value stack. 
+    duplicate: 
+        goto check_one_value linking r1 // checks to make sure there are 
+                                        // numbers in the value stack linking 
+                                        // return 
+        pop r4 off stack r3 // taking value off of value_stack
+        push r4 on stack r3
+        push r4 on stack r3
+        goto waiting
+
+################################################################################
+
+.section init
+    m[r0][jumptable + 'p'] := pop_stack
+
+.section text 
+    
+    // r3: pointer to the top of the value stack (global)
+    // r1: store return address for checking one value
+    // r4: temporarily stores value popped off of the value stack 
+    // Pops value off the value stack and throws it away. 
+    pop_stack: 
+        goto check_one_value linking r1 // checks to make sure there are 
+                                        // numbers in the value stack linking 
+                                        // return
+        pop r4 off stack r3 // taking value off of value_stack
+        goto waiting
+
+################################################################################
+
+.section init
+    m[r0][jumptable + 'z'] := zero_stack
+
+.section text 
+
+    // r3: pointer to the top of the value stack (global)
+    // r4: stack height (in this procedure)
+    // r5: temporary register for all values removed from the value stack 
+    // Removes all values from the value stack. 
+    zero_stack: 
+        r4 := value_stack - r3 // stack height
+        if (r4 == 0) goto waiting
+        pop r5 off stack r3 // taking value off of value_stack
+        goto zero_stack
+
+
+################################################################################
+
+.section init
+    m[r0][jumptable + '/'] := div
+
+.section text 
+
+    // r1: used for storing return address when checking two values and then 
+    //     later used as a temporary register
+    // r3: pointer to the top of the value stack (global)
+    // r4: stores the first element (y) popped from the top of value stack
+    // r5: stores the second element (x) popped from the top of value stack
+    // Divides two values popped off from the value and pushes the result back 
+    // onto the value stack by calling appropriate divide procedures based on 
+    // whether the numbers x and y are positive or negative 
+    div: 
+        goto check_two_values linking r1 // checks to make sure there are 
+                                        // at least two numbers in the 
+                                        // value stack linking return
+                                         
+        pop r4 off stack r3 // popping value off of value_stack using stack 
+                            // pointer r3
+        pop r5 off stack r3
+        
+        if (r4 == 0) goto divide_by_zero // an error bc can't divide by 0
+        if (r5 <s 0) goto neg_x using r1 // if x is neg
+        if (r4 <s 0) goto neg_y using r1 // if y is neg 
+        goto pos_x_pos_y // case when both x and y are pos
+
+
+    // r4: stores the first element (y) popped from the top of value stack
+    // r5: stores the second element (x) popped from the top of value stack
+    // Outputs error message for trying to divide by zero when it's not 
+    // possible. Pushes the values previously popped off back onto the value 
+    // stack and goes back to waiting. 
+    divide_by_zero:
+        output "Division by zero\n" 
+        push r5 on stack r3 // r5 is x
+        push r4 on stack r3 // r4 is y
+        goto waiting 
+
+
+    
+    // r4: stores the first element (y) popped from the top of value stack
+    // r5: stores the second element (x) popped from the top of value stack 
+    // r1: temporarily storing result of -x/y 
+    // r3: pointer to the top of the value stack (global)
+    // If y is also negative, then goes to procedure neg_x_neg_y
+    // Else, changes -x to x, divides x/y, then changes the result z to -z, 
+    // then pushes the result onto the value stack. 
+    neg_x:
+        if (r4 <s 0) goto neg_x_neg_y using r1
+        r5 := -r5 // change neg x to pos x
+        r1 := r5 / r4
+        r1 := -r1
+        push r1 on stack r3 
+        goto waiting
+    
+
+    // r4: stores the first element (y) popped from the top of value stack
+    // r5: stores the second element (x) popped from the top of value stack 
+    // r1: temporarily storing result of -x/-y 
+    // r3: pointer to the top of the value stack (global)
+    // Changes -x to x, -y to y, then divides x/y, then pushes the result onto
+    // the value stack.
+    neg_x_neg_y:
+        r5 := -r5 // change neg x to pos x
+        r4 := -r4 // change neg y to pos y
+        r1 := r5 / r4
+        push r1 on stack r3 
+        goto waiting 
+    
+
+    // r4: stores the first element (y) popped from the top of value stack
+    // r5: stores the second element (x) popped from the top of value stack 
+    // r1: temporarily storing result of x/-y 
+    // r3: pointer to the top of the value stack (global)
+    // Changes -y to y, then divides x/y, then changes the result z to -z, then 
+    // pushes the result onto the value stack. 
+    neg_y:
+        r4 := -r4 // change neg y to pos y
+        r1 := r5 / r4
+        r1 := -r1 // change pos divided answer to neg 
+        push r1 on stack r3 
+        goto waiting       
+        
+        
+    // r4: stores the first element (y) popped from the top of value stack
+    // r5: stores the second element (x) popped from the top of value stack 
+    // r1: temporarily storing result of x/y 
+    // r3: pointer to the top of the value stack (global)
+    // Divides x/y and pushes the result onto the value stack.
+    pos_x_pos_y:
+        r1 := r5 / r4
+        push r1 on stack r3 
+        goto waiting

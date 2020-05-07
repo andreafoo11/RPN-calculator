@@ -1,0 +1,11 @@
+.section init 
+    .zero r0 // declare global register r0 to hold zero
+    .temp r6, r7 // set r6 and r7 as temporary registers
+    r0 := 0 // set global register r0 to 0
+
+    // starting the program by calling main and linking the return 
+    // address so that the program will call halt when main finishes
+    // executing
+    start: 
+        goto main linking r1 
+        halt
